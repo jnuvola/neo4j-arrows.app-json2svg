@@ -1,0 +1,52 @@
+name: Generate Graph Image Preview
+
+on:
+  push:
+    paths:
+      - '**/*-graph.json'
+
+jobs:
+  generate-graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Find new or modified graph JSON files
+        id: find_json
+        run: |
+          BEFORE_SHA=${{ github.event.before || 'HEAD~1' }}
+          FILES=$(git diff --name-only $BEFORE_SHA ${{ github.sha }} -- '*-graph.json')
+          echo "Found files: $FILES"
+          echo "json_files=$FILES" >> $GITHUB_ENV
+
+
+      - name: Generate graph images
+        run: |
+          for file in $json_files; do
+            output_file="${file%.json}.svg"
+            python draw.py "$file" "$output_file"
+          done
+
+      - name: Commit and push generated images
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name 'GitHub Actions bot'
+          git config --global user.email 'github-actions-bot@github.com'
+          git add .
+          git diff --cached --quiet || git commit -m "Generate graph preview images"
+          git push origin HEAD:${{ github.ref }}
