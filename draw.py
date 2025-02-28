@@ -5,9 +5,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
+NODE_FILL_COLOR_SPACE = "tab20"
 NODE_EDGE_COLOR = "black"
-NODE_FILL_COLOR = "white"
-NODE_LABEL_COLOR = "blue"
+NODE_LABEL_COLOR = "black"
 NODE_TEXT_COLOR = "white"
 PROPERTY_LABEL_COLOR = "grey"
 PROPERTY_TEXT_COLOR = "white"
@@ -31,15 +31,16 @@ def build_graph(data):
         y = node["position"]["y"]
         pos[node_id] = (x, y)
 
-        if node.get("labels"):
-            label_text = "\n".join(node["labels"])
+        labels = node.get("labels", [])
+        if labels:
+            label_text = "\n".join(labels)
         elif node.get("caption"):
             label_text = node["caption"]
         else:
             label_text = node_id
 
         properties = node.get("properties", {})
-        G.add_node(node_id, label=label_text, properties=properties)
+        G.add_node(node_id, label=label_text, labels=labels, properties=properties)
 
     for rel in data["relationships"]:
         from_id = rel.get("fromId")
@@ -62,11 +63,29 @@ def draw_graph(G, pos, output_filename="graph.svg"):
     fig_height = (y_max - y_min) / 100
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
+    unique_label_mapping = {}
+    node_colors = []
+    cmap = plt.get_cmap(NODE_FILL_COLOR_SPACE)
+    next_color_index = 0
+
+    for node, attr in G.nodes(data=True):
+        labels = attr.get("labels", [])
+        key = tuple(sorted(labels))
+        if key not in unique_label_mapping:
+            if next_color_index < cmap.N:
+                unique_label_mapping[key] = cmap(next_color_index)
+                next_color_index += 1
+            else:
+                raise ValueError(
+                    f"Exceeded the number of unique colors available in the {NODE_FILL_COLOR_SPACE} colormap."
+                )
+        node_colors.append(unique_label_mapping[key])
+
     nx.draw_networkx_nodes(
         G,
         pos,
         node_size=1500,
-        node_color=NODE_FILL_COLOR,
+        node_color=node_colors,
         edgecolors=NODE_EDGE_COLOR,
         ax=ax,
     )
